@@ -1,5 +1,7 @@
 # modrom
 
+Re-mix classic video games (and other software) while respecting intellectual property rights!
+
 version 0.1
 
 This program allows developers to share patches for ROM files without sharing any part of the original ROM files themselves.
