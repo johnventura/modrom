@@ -75,7 +75,7 @@ func GetHashFromOffset(memBuf []byte, offset int) ([32]byte, error) {
 }
 
 // FindDifference compares two byte arrays and returns difference as []FileDiff array
-func FindDifference(bufSrc []byte, bufAlt []byte) []FileDiff {
+func FindDifference(bufSrc []byte, bufAlt []byte, outputType int8) []FileDiff {
 	diffStart := 0
 	diffStartOld := -1
 	rDiffs := []FileDiff{}
@@ -91,9 +91,29 @@ func FindDifference(bufSrc []byte, bufAlt []byte) []FileDiff {
 		if (bufSrc[i] == bufAlt[i]) && diffStart == diffStartOld {
 			diffEnd := i
 			newDiff := FileDiff{}
-			newDiff.Start = diffStart
-			newDiff.Offset = 0
+			// determine offset, if we are in the last block
+			if i > (len(bufSrc) - sha256.BlockSize) {
+				newDiff.Start = len(bufSrc) - sha256.BlockSize
+				newDiff.Offset = diffStart - newDiff.Start
+			} else {
+				// when we are not in the last block use simple offset
+				newDiff.Start = diffStart
+				newDiff.Offset = 0
+			}
 			newDiff.NewBytes = hex.EncodeToString(bufAlt[diffStart:diffEnd])
+			// get hash of original block
+			if (outputType & DiffsWithSHA) != 0 {
+				newHash, err := GetHashFromOffset(bufSrc, newDiff.Start)
+				if err != nil {
+					newDiff.Shasum = ""
+				}
+				newDiff.Shasum = hex.EncodeToString(newHash[:])
+			}
+			// if user does not want offsets for some reason
+			if (outputType & DiffsWithOffset) == 0 {
+				newDiff.Start = 0
+				newDiff.Offset = 0
+			}
 			rDiffs = append(rDiffs, newDiff)
 			diffStartOld = -1
 		}
@@ -195,40 +215,30 @@ func cmdPatch(fileNameSrc string, patchFileName string) ([]byte, error) {
 var (
 	DiffsWithSHA    int8 = 1
 	DiffsWithOffset int8 = 2
+	DiffsPretty     int8 = 4
 )
 
 // DiffsToJson compares two byte arrays and describes the difference as Json
 func DiffsToJson(fileBuf []byte, fileBufAlt []byte, OutputType int8) (string, error) {
-	rStr := ""
-	fileDiffs := FindDifference(fileBuf, fileBufAlt)
-	rStr = fmt.Sprintf(`{"patch": [`)
-	for i, fileDiff := range fileDiffs {
-		displayHash := ""
-		if fileDiff.Start > (len(fileBuf) - sha256.BlockSize) {
-			fileDiff.Offset = fileDiff.Start - (len(fileBuf) - sha256.BlockSize)
-			fileDiff.Start = (len(fileBuf) - sha256.BlockSize)
-		}
+	var out bytes.Buffer
+	fileDiffs := FindDifference(fileBuf, fileBufAlt, OutputType)
+	var patchFile PatchFile
+	patchFile.Patch = fileDiffs
 
-		// suppress SHA, if user wants to
-		if (OutputType & DiffsWithSHA) != 0 {
-			newHash, err := GetHashFromOffset(fileBuf, fileDiff.Start)
-			if err != nil {
-				return "", err
-			}
-			displayHash = hex.EncodeToString(newHash[:])
-		}
-		newBytes := fileDiff.NewBytes
-		if i > 0 {
-			rStr = rStr + fmt.Sprintf(",")
-		}
-		// suppress offset, if user wants to
-		if (OutputType & DiffsWithOffset) == 0 {
-			fileDiff.Start = 0
-		}
-		rStr = rStr + fmt.Sprintf(`{"start": %v, "offset": %v, "newbytes": "%v", "shasum": "%v", "comment": ""}`, fileDiff.Start, fileDiff.Offset, newBytes, displayHash)
+	patchJson, err := json.Marshal(patchFile)
+	if err != nil {
+		return "", err
 	}
-	rStr = rStr + fmt.Sprintf("]}\n")
-	return rStr, nil
+
+	rBytes := []byte{}
+	if (OutputType & DiffsPretty) == 0 {
+		rBytes = patchJson
+	} else {
+		json.Indent(&out, patchJson, "", "  ")
+		rBytes = out.Bytes()
+	}
+
+	return string(rBytes), nil
 }
 
 // usage helps the user by displaying usage information
@@ -259,12 +269,23 @@ func main() {
 		// optional commands for patch file output
 		diffMode := DiffsWithSHA | DiffsWithOffset
 		if ArgC > 4 {
-			switch os.Args[4] {
-			case "nosha":
-				diffMode = diffMode ^ DiffsWithSHA
-			case "nooffset":
-				diffMode = diffMode ^ DiffsWithOffset
+			for _, directive := range os.Args[4:] {
+				switch directive {
+				case "nosha":
+					diffMode = diffMode ^ DiffsWithSHA
+				case "nooffset":
+					diffMode = diffMode ^ DiffsWithOffset
+				case "pretty":
+					diffMode = diffMode | DiffsPretty
+				default:
+					fmt.Printf("unknown directive %v\n", directive)
+					usage(os.Args[0])
+				}
 			}
+		}
+		if (diffMode & (DiffsWithSHA | DiffsWithOffset)) == 0 {
+			fmt.Printf("The \"nosha\" and \"nooffset\" directives are incompatible")
+			usage(os.Args[0])
 		}
 		OriginalFileName := os.Args[2]
 		ModFileName := os.Args[3]
@@ -272,7 +293,7 @@ func main() {
 		if err != nil {
 			fmt.Printf("ERROR: %v\n", err)
 		}
-		fmt.Printf("%s\n", jsonDiffOut)
+		fmt.Printf("%s", jsonDiffOut)
 	// user wants to apply a Json formatted patch
 	case "patch":
 		OriginalFileName := os.Args[2]

@@ -18,7 +18,7 @@ Moreover, the great scheme of the Modern State had now lost something of its fir
 
 Moreover, the great scheme of the Modern State had now lost something of its first compelling freshness. The "young men of '65" had had ten years of responsible administrative work. They had been in contact with urgent detail for most of that period. They had had to modify De Windt's generalizations in many particulars, and the large splendour of the whole project no longer had the same dominating power over their minds. They had lost something of the professional esprit de corps, the close intimate confidence with each other, with which they had originally embarked upon the great adventure of the Modern State. Many had married women of the older social tradition and formed new systems of gratification and friendship. They had ceased to be enthusiastic young men and they had become men of the world. The consequent loss of a sure touch upon primary issues was particularly evident in the closing sessions.`)
 
-	resultWeWant := `{"patch": [{"start": 412, "offset": 0, "newbytes": "757274", "shasum": "843c295955090eb4b25b449f8b03b9ab88027d83ca888209eab597fc5149a67c", "comment": ""},{"start": 1639, "offset": 47, "newbytes": "636c6f73", "shasum": "d7ab7c3249fca6159a6d786d7e9a09de83684378efca68ebc1374e01fbd499d5", "comment": ""}]}` + "\n"
+	resultWeWant := `{"patch":[{"start":412,"offset":0,"newbytes":"757274","shasum":"843c295955090eb4b25b449f8b03b9ab88027d83ca888209eab597fc5149a67c","comment":""},{"start":1639,"offset":47,"newbytes":"636c6f73","shasum":"d7ab7c3249fca6159a6d786d7e9a09de83684378efca68ebc1374e01fbd499d5","comment":""}]}`
 
 	reportStr, err := DiffsToJson(originalStr, altStr, int8(3))
 	if err != nil {
